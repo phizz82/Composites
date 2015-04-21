@@ -1,0 +1,295 @@
+clc
+clear all 
+
+%% Engineering Constants of the Composite
+
+E1c = 143000;
+E2c = 9600;
+G12 = 5200;
+v12 = 0.338;
+E1t = 176000; 
+E2t = 8900; 
+v21 = (E2c*v12)/E1c; 
+
+%% Reduced Stiffnesses
+
+Q11 = E1c/(1-(v12*v21));
+Q12 = (v12*E2c)/(1-v12*v21);
+Q22 = E2c/(1-(v12*v21));
+Q66 = G12; 
+
+%% Transformed Reduced Stiffnesses for the Different Angle Plies 
+
+syms m n Q11bar Q12bar Q16bar Q22bar Q26bar Q66bar; 
+
+Q11bar = (m^4*Q11)+((2*m^2*n^2)*(Q12+2*Q66))+(n^4*Q22); 
+Q12bar = ((n^2*m^2).*(Q11+Q22-4*Q66))+((n^4+m^4)*Q12);
+Q16bar = (m*n*(((m^2)*(Q11-Q12-2*Q66))+((n^2)*(Q12-Q22+2*Q66))));
+Q22bar = (n^4*Q11)+((2*m^2*n^2)*(Q12+2*Q66))+(m^4*Q22); 
+Q26bar = (n*m*((n^2*(Q11-Q12-2*Q66))+(m^2*(Q12-Q22+2*Q66))));
+Q66bar = ((m^2*n^2)*(Q11+Q22-2*Q12-2*Q66))+((m^4+n^4)*Q66);
+
+ply = [pi()/3,-pi()/3,0,pi()/2]; 
+
+%% Setting up laminate layers 
+
+% Each layer can be represented by 1,2,3 and 4 (each number relates to the
+% angle described in the 'ply' variable. 
+
+laminate = [1,3,2,2,3,1,3,2,1,1,2,3,2,1,3,3,1,2];
+thickness = 0.1397;
+
+Q11barply = zeros([1,4]);
+Q12barply = zeros([1,4]);
+Q16barply = zeros([1,4]);
+Q22barply = zeros([1,4]);
+Q26barply = zeros([1,4]);
+Q66barply = zeros([1,4]);
+
+for i = 1:4
+    m = cos(ply(i)); 
+    n = sin(ply(i));
+    Q11barply(i) = eval(Q11bar); 
+    Q12barply(i) = eval(Q12bar);
+    Q16barply(i) = eval(Q16bar);
+    Q22barply(i) = eval(Q22bar);
+    Q26barply(i) = eval(Q26bar);
+    Q66barply(i) = eval(Q66bar);
+end 
+
+%% Determining Aij matrix
+
+A11 = 0;
+A12 = 0; 
+A16 = 0;
+A22 = 0;
+A26 = 0;
+A66 = 0;
+
+for j = 1:18
+    A11 = A11 + Q11barply(laminate(j))*thickness;
+    A12 = A12 + Q12barply(laminate(j))*thickness;
+    A16 = A16 + Q16barply(laminate(j))*thickness;
+    A22 = A22 + Q22barply(laminate(j))*thickness;
+    A26 = A26 + Q26barply(laminate(j))*thickness;
+    A66 = A66 + Q66barply(laminate(j))*thickness;
+end
+
+A = [A11,A12,A16;
+     A12,A22,A26;
+     A16,A26,A66];
+
+%% Determining the Bij matrix
+zk2 = zeros(1:2);
+for i = 0:18
+    zk2(i+1) = (i-9)^2;
+end
+
+B11 = 0; 
+B12 = 0; 
+B16 = 0;
+B22 = 0; 
+B26 = 0; 
+B66 = 0; 
+zk22 = zeros(1:2);
+
+for j = 1:18
+    zk22(j) = (zk2(j+1)-zk2(j));
+    B11 = B11 + (0.5*Q11barply(laminate(j))*(thickness^2)*(zk22(j)));
+    B12 = B12 + (0.5*Q12barply(laminate(j))*(thickness^2)*(zk22(j)));
+    B16 = B16 + (0.5*Q16barply(laminate(j))*(thickness^2)*(zk22(j)));
+    B22 = B22 + (0.5*Q22barply(laminate(j))*(thickness^2)*(zk22(j)));
+    B26 = B26 + (0.5*Q26barply(laminate(j))*(thickness^2)*(zk22(j)));
+    B66 = B66 + (0.5*Q66barply(laminate(j))*(thickness^2)*(zk22(j)));
+end
+
+B = [B11,B12,B16;
+     B12,B22,B26;
+     B16,B26,B66];
+
+%% Determing the Dij matrix
+
+zk3 = zeros([1,18]);
+for i = 0:18 
+    zk3(i+1) = (i-9)^3;
+end
+
+D11 = 0;
+D12 = 0; 
+D16 = 0; 
+D22 = 0; 
+D26 = 0; 
+D66 = 0;
+
+zk33 = zeros([1,18]);
+for j = 1:18
+    zk33(j) = (zk3(j+1)-zk3(j));
+    D11 = D11 + (1/3*Q11barply(laminate(j))*(thickness^3)*(zk33(j)));
+    D12 = D12 + (1/3*Q12barply(laminate(j))*(thickness^3)*(zk33(j)));
+    D16 = D16 + (1/3*Q16barply(laminate(j))*(thickness^3)*(zk33(j)));
+    D22 = D22 + (1/3*Q22barply(laminate(j))*(thickness^3)*(zk33(j)));
+    D26 = D26 + (1/3*Q26barply(laminate(j))*(thickness^3)*(zk33(j)));
+    D66 = D66 + (1/3*Q66barply(laminate(j))*(thickness^3)*(zk33(j)));
+end
+
+D = [D11,D12,D16;
+     D12,D22,D26;
+     D16,D26,D66];
+ 
+%% ABD matrix
+
+ABD = [A,B;
+       B,D];
+
+for i = 1:6
+    for j = 1:6
+        if ABD(i,j) <= 1E-10
+            ABD(i,j) = 0; 
+        else
+            ABD(i,j) = ABD(i,j);
+        end
+    end
+end
+%% Generating Strains  
+
+Nx = 10; 
+Mx = 4.19;
+ABDi = inv(ABD);
+
+epix = Nx*ABDi(1,1)+Mx*ABDi(1,4);
+epiy = Nx*ABDi(1,2)+Mx*ABDi(1,5); 
+gamxy = Nx*ABDi(1,3)+Mx*ABDi(1,6);
+kapx = Nx*ABDi(1,4)+Mx*ABDi(4,4); 
+kapy = Nx*ABDi(1,5)+Mx*ABDi(4,5); 
+kapxy = Nx*ABDi(1,6)+Mx*ABDi(4,6);
+
+%% Qij for all rotations
+
+Q11barrot = zeros([360,18]);
+Q12barrot = zeros([360,18]);
+Q16barrot = zeros([360,18]);
+Q22barrot = zeros([360,18]);
+Q26barrot = zeros([360,18]);
+Q66barrot = zeros([360,18]);
+
+for i = 1:360
+    for j = 1:18
+        m = cos(((i-1)*(pi()/180))+ply(laminate(j)));
+        n = sin(((i-1)*(pi()/180))+ply(laminate(j)));
+        Q11barrot(i,j) = eval(Q11bar);
+        Q12barrot(i,j) = eval(Q12bar);
+        Q16barrot(i,j) = eval(Q16bar);
+        Q22barrot(i,j) = eval(Q22bar);
+        Q26barrot(i,j) = eval(Q26bar);
+        Q66barrot(i,j) = eval(Q66bar);
+    end
+end
+
+%% Calculating Sigma x
+
+    Sigx1 = zeros([360,18]);
+    Sigx2 = zeros([360,18]);
+    theta = zeros([360,18]);
+for i = 1:360
+    for j = 0:17
+    Sigx1(i,j+1)=(Q11barrot(i,j+1)*epix)+(Q11barrot(i,j+1)*((j-9)*thickness*kapx))+(Q12barrot(i,j+1)*epiy)+(Q12barrot(i,j+1)*((j-9)*thickness*kapy))+(Q16barrot(i,j+1)*gamxy)+(Q16barrot(i,j+1)*((j-9)*thickness*kapxy));
+    Sigx2(i,j+1)=(Q11barrot(i,j+1)*epix)+(Q11barrot(i,j+1)*((j-8)*thickness*kapx))+(Q12barrot(i,j+1)*epiy)+(Q12barrot(i,j+1)*((j-8)*thickness*kapy))+(Q16barrot(i,j+1)*gamxy)+(Q16barrot(i,j+1)*((j-8)*thickness*kapxy));
+    theta(i,j+1)=(i*pi()/180);
+    end
+end
+
+figure('Color',[1,1,1])
+polar(theta,Sigx2,'--')
+hold on 
+polar(theta,Sigx1)
+hold off
+
+%% Generating Strains for Tsai-Wu 
+
+Nx = 440; 
+Mx = 184.4;
+
+epix = Nx*ABDi(1,1)+Mx*ABDi(1,4);
+epiy = Nx*ABDi(1,2)+Mx*ABDi(1,5); 
+gamxy = Nx*ABDi(1,3)+Mx*ABDi(1,6);
+kapx = Nx*ABDi(1,4)+Mx*ABDi(4,4); 
+kapy = Nx*ABDi(1,5)+Mx*ABDi(4,5); 
+kapxy = Nx*ABDi(1,6)+Mx*ABDi(4,6);
+
+
+%% Calculating Sigma x for Tsai-Wu
+
+for i = 1:360
+    for j = 0:17
+    Sigx12(i,j+1)=(Q11barrot(i,j+1)*(epix+((j-9)*thickness*kapx)))+(Q12barrot(i,j+1)*(epiy+((j-9)*thickness*kapy)))+(Q16barrot(i,j+1)*(gamxy+((j-9)*thickness*kapxy)));
+    Sigx22(i,j+1)=(Q11barrot(i,j+1)*(epix+((j-8)*thickness*kapx)))+(Q12barrot(i,j+1)*(epiy+((j-8)*thickness*kapy)))+(Q16barrot(i,j+1)*(gamxy+((j-8)*thickness*kapxy)));
+    end
+end
+%% Calculating Sigma y for Tsai-Wu
+
+for i = 1:360
+    for j = 0:17
+    Sigy1(i,j+1)=(Q12barrot(i,j+1)*(epix+((j-9)*thickness*kapx)))+(Q22barrot(i,j+1)*(epiy+((j-9)*thickness*kapy)))+(Q26barrot(i,j+1)*(gamxy+((j-9)*thickness*kapxy)));
+    Sigy2(i,j+1)=(Q12barrot(i,j+1)*(epix+((j-8)*thickness*kapx)))+(Q22barrot(i,j+1)*(epiy+((j-8)*thickness*kapy)))+(Q26barrot(i,j+1)*(gamxy+((j-8)*thickness*kapxy)));
+    end
+end
+
+%% Calculating Tau xy for Tsai-Wu
+
+for i = 1:360
+    for j = 0:17
+    Tau1(i,j+1)=(Q16barrot(i,j+1)*(epix+((j-9)*thickness*kapx)))+(Q26barrot(i,j+1)*(epiy+((j-9)*thickness*kapy)))+(Q66barrot(i,j+1)*(gamxy+((j-9)*thickness*kapxy)));
+    Tau2(i,j+1)=(Q16barrot(i,j+1)*(epix+((j-8)*thickness*kapx)))+(Q26barrot(i,j+1)*(epiy+((j-8)*thickness*kapy)))+(Q66barrot(i,j+1)*(gamxy+((j-8)*thickness*kapxy)));
+    end
+end
+
+%% Tsai-Wu Failure Constants
+
+F1 = 704.773E-6;
+F2 = -16984.750E-6;
+F11 = 0.480E-6; 
+F22 = 91.316E-6; 
+F66 = 315.488E-6;
+
+for i = 1:360
+    for j = 1:18
+       
+        m = cos((ply(laminate(j)))+((i-1)*(pi()/180)));
+        n = sin((ply(laminate(j)))+((i-1)*(pi()/180)));
+        o = m^2;
+        p = n^2;
+        q = n*m;
+        Sig11(i,j) = (o*Sigx12(i,j))+(p*Sigy1(i,j))+(2*q*Tau1(i,j));
+        Sig12(i,j) = (o*Sigx22(i,j))+(p*Sigy2(i,j))+(2*q*Tau2(i,j));
+        Sig21(i,j) = (p*Sigx12(i,j))+(o*Sigy1(i,j))-(2*q*Tau1(i,j));
+        Sig22(i,j) = (p*Sigx22(i,j))+(o*Sigy2(i,j))-(2*q*Tau2(i,j));
+        T1(i,j) = (-q*Sigx12(i,j))+(q*Sigy1(i,j))+((o-p)*Tau1(i,j));
+        T2(i,j) = (-q*Sigx22(i,j))+(q*Sigy2(i,j))+((o-p)*Tau2(i,j));
+        
+        A = Sig11(i,j)*Sig11(i,j);
+        B = Sig12(i,j)*Sig12(i,j);
+        C = Sig21(i,j)*Sig21(i,j);
+        D = Sig22(i,j)*Sig22(i,j);
+        E = T1(i,j)*T1(i,j);
+        F = T2(i,j)*T2(i,j);
+        G = Sig11(i,j)*Sig21(i,j);
+        H = Sig12(i,j)*Sig22(i,j);
+        TW1(i,j) = (F1*Sig11(i,j))+(F2*Sig21(i,j))+(F11*A)+(F22*C)+(F66*E)-((sqrt(F11*F22))*G);
+        TW2(i,j) = (F1*Sig12(i,j))+(F2*Sig22(i,j))+(F11*B)+(F22*D)+(F66*F)-((sqrt(F11*F22))*H);
+    end 
+end
+
+figure('Color',[1,1,1])
+polar(theta,TW2,'--')
+hold on 
+polar(theta,TW1)
+hold off
+
+%% Creating the Tsai-Wu Strength Envelope
+
+for i = 1:360
+    beta(i) =(i-1)*pi()/180;
+end
+SE = max(TW2,[],2);
+figure('Color',[1,1,1])
+polar(transpose(beta),SE,'b');
